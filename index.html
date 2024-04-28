@@ -24,15 +24,22 @@
       .split-uploads {
         width: 100%;
         margin-left: 20px;
+        margin-bottom: 15px;
       }
 
       .update-event {
         margin: 10px;
       }
+
+      .input {
+        border: none;
+        width: 300px;
+        font-family: Georgia, sans-serif;
+      }
     </style>
   </head>
   <body>
-    <!-- <div class="csv-upload-container container">
+    <div class="csv-upload-container container">
       <label for="csv-upload" class="form-label">Upload CSV:</label>
       <input
         id="csv-upload"
@@ -43,7 +50,7 @@
     </div>
     <div class="split-uploads">
       <span>OR</span>
-    </div> -->
+    </div>
     <div class="xlsx-upload-container container">
       <label for="xlsx-upload" class="form-label">Upload XLSX:</label>
       <input
@@ -54,122 +61,9 @@
       />
     </div>
     <div class="update-event">Waiting for upload...</div>
-    <iframe id="table-iframe">
-    </iframe>
+    <iframe id="table-iframe"> </iframe>
 
     <script lang="javascript" src="./xlsx.js"></script>
-    <script>
-      const fileInput = document.getElementById("xlsx-upload");
-      const eventLog = document.querySelector(".update-event");
-      const reader = new FileReader();
-      const keyOrder = [
-        "utm_source",
-        "utm_campaign",
-        "utm_medium",
-        "gclid",
-        "checkout_token",
-        "cart_token",
-        "PG Transaction Id",
-        "Breeze Order Id",
-        "CustomerGSTIN",
-        "Company Name"
-      ];
-      function addListener(file) {
-        reader.addEventListener("loadend", (e) => {
-          console.log("DEBUGGING::LOADEND", e);
-          const fileData = e.target.result;
-          let workbook = XLSX.read(
-            fileData,
-            { type: "binary" },
-            { dateNF: "mm/dd/yyyy" }
-          );
-          workbook.SheetNames.forEach(async (sheet) => {
-            if (sheet === "Orders") {
-              const sheetData = XLSX.utils.sheet_to_json(
-                workbook.Sheets[sheet],
-                {
-                  raw: false,
-                }
-              );
-              const sheetCSV = XLSX.utils.sheet_to_csv(workbook.Sheets[sheet], {
-                raw: false,
-                defval: null,
-                RS: "\r\n",
-                FS: "\t\t",
-              });
-              const sheetCSVRows = sheetCSV.split("\r\n");
-              sheetCSVRows[0] = sheetCSVRows[0].split("\t\t");
-              sheetCSVRows[0].push(...keyOrder);
-              console.log("DEBUGGING::SHEETDATA", sheetData, sheetCSVRows);
-              for (let idx = 0; idx < sheetData.length; idx++) {
-                const row = sheetData[idx];
-                if (row["Additional Details"]) {
-                  const details = row["Additional Details"].split("\n");
-                  for (const detail of details) {
-                    const [title, value] = detail
-                      .split(":")
-                      .map((val) => val.trim());
-                    row[title] = value;
-                  }
-                }
-                sheetCSVRows[idx + 1] = sheetCSVRows[idx + 1].split("\t\t");
-                keyOrder.forEach((key) => {
-                  sheetCSVRows[idx + 1].push(row[key] ? row[key] : "NA");
-                });
-              }
-              const updatedCSV = sheetCSVRows.join("\r\n");
-              console.log("DEBUGGING::AVAILABLE", sheetCSVRows);
-              const updatedXLSX = XLSX.utils.aoa_to_sheet(sheetCSVRows);
-              const updatedWorkbook = XLSX.utils.book_new();
-              XLSX.utils.book_append_sheet(
-                updatedWorkbook,
-                updatedXLSX,
-                "Orders"
-              );
-              const table = XLSX.utils.sheet_to_html(updatedXLSX);
-              const iframe = document.getElementById("table-iframe");
-              const iframeDoc = iframe.contentWindow.document;
-              iframeDoc.open();
-              iframeDoc.write(table);
-              iframeDoc.write(`
-              <style>
-                tr:nth-child(even) {background-color: #f2f2f2;}                
-
-                table,
-                td {
-                  font-family: Georgia, serif;
-                  border-bottom: 1px solid #ddd;
-                  border-collapse: collapse;
-                  text-align: center;
-                  padding: 15px;
-                  margin: 10px;
-                }
-
-                tr:hover {background-color: #9999;}
-
-              </style>
-              `)
-              iframeDoc.close();
-              XLSX.writeFile(
-                updatedWorkbook,
-                file.name.split(".")[0] + "-updated.xlsx"
-              );
-            }
-          });
-        });
-      }
-
-      function handleSelected(e) {
-        eventLog.textContent = "Parsing and updating file...";
-        const selectedFile = fileInput.files[0];
-        console.log("DEBUGGING::UPLOADEDFILE", selectedFile);
-        if (selectedFile) {
-          addListener(selectedFile);
-          reader.readAsBinaryString(selectedFile);
-        }
-      }
-
-      fileInput.addEventListener("change", handleSelected);
-    </script>
+    <script lang="javascript" src="./index.js"></script>
   </body>
 </html>
