@@ -78,11 +78,22 @@ function convertCsvToAOA(csvData, lineSeparator, dataSeparator) {
  */
 function safeConvertCsvToAOA(
   csvData,
-  lineSeparator,
+  lineSeparators,
   dataSeparator,
   groupLimit
 ) {
   try {
+    csvData = csvData.replaceAll('""', "");
+    const lineSeparator = "\n";
+    for (const separator of lineSeparators) {
+      const firstNewLine = csvData.indexOf(separator);
+      // const headerRow = csvData.slice(0, firstNewLine).split(dataSeparator);
+      if (firstNewLine !== -1) {
+        csvData = csvData.replaceAll(separator, "\n");
+        // lineSeparator = separator;
+        break;
+      }
+    }
     const firstNewLine = csvData.indexOf(lineSeparator);
     const firstDataBlock = csvData.indexOf(dataSeparator);
     if (firstNewLine === -1 || firstDataBlock === -1) {
@@ -145,7 +156,12 @@ function createWorkbook(fileData) {
     if (uploadedFile.name.endsWith("xlsx")) {
       return XLSX.read(fileData, { type: "binary" }, { dateNF: "dd/mm/yyyy" });
     } else {
-      const sheetAOA = safeConvertCsvToAOA(fileData.toString(), "\n", ",", '"');
+      const sheetAOA = safeConvertCsvToAOA(
+        fileData.toString(),
+        ["\r\n", "\n"],
+        ",",
+        '"'
+      );
       const sheet = XLSX.utils.aoa_to_sheet(sheetAOA);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, sheet, "Orders");
@@ -218,7 +234,7 @@ reader.addEventListener("loadend", (e) => {
   //   })
   //   .join(",");
   // console.log("FINALCSV:", updatedCSV);
-  const updatedCSV1 = updatedCSV.replaceAll('"""', '');
+  const updatedCSV1 = updatedCSV.replaceAll('"""', "");
   const csvBlob = new Blob([updatedCSV1], { type: "text/csv" });
   const blobUrl = window.URL.createObjectURL(csvBlob);
   const downloadLink = document.getElementById("download-link");
