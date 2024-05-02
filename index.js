@@ -5,7 +5,10 @@ const keyOrder = [
   "utm_source",
   "utm_campaign",
   "utm_medium",
+  "utm_term",
+  "utm_content",
   "gclid",
+  "fbclid",
   "checkout_token",
   "cart_token",
   "PG Transaction Id",
@@ -66,6 +69,73 @@ function convertCsvToAOA(csvData, lineSeparator, dataSeparator) {
 }
 
 /**
+ * Safely parses each row in csv when data itself might contain lineSeparator. Requires header row to be present where line separator will not be used otherwise fails.
+ * @param {string} csvData
+ * @param {string} lineSeparator
+ * @param {string} dataSeparator
+ * @param {string} groupLimit when data blocks are grouped together since the data itself contains line or data separator characters
+ * @returns
+ */
+function safeConvertCsvToAOA(
+  csvData,
+  lineSeparator,
+  dataSeparator,
+  groupLimit
+) {
+  try {
+    const firstNewLine = csvData.indexOf(lineSeparator);
+    const firstDataBlock = csvData.indexOf(dataSeparator);
+    if (firstNewLine === -1 || firstDataBlock === -1) {
+      eventLog.textContent = `Unable to safely convert CSV Data to required format. Please check file contains a valid header row and that line delimiter is ${lineSeparator}`;
+      return;
+    }
+    console.log(csvData.length);
+    // const headerRow = csvData.slice(0, firstNewLine).split(dataSeparator);
+    const aoa = [[]];
+    let isGroupedData = false;
+    let rowNum = 0;
+    let dataBuffer = "";
+    for (let i = 0; i < csvData.length; i++) {
+      const curCharacter = csvData[i];
+      switch (csvData[i]) {
+        case lineSeparator:
+          if (isGroupedData) {
+            dataBuffer += curCharacter;
+          } else {
+            aoa[rowNum].push(dataBuffer);
+            dataBuffer = "";
+            aoa.push([]);
+            rowNum++;
+          }
+          break;
+        case dataSeparator:
+          if (isGroupedData) {
+            dataBuffer += curCharacter;
+          } else {
+            aoa[rowNum].push(dataBuffer);
+            dataBuffer = "";
+          }
+          break;
+        case groupLimit:
+          if (csvData[i - 1] !== "\\") {
+            isGroupedData = !isGroupedData;
+          }
+          dataBuffer += curCharacter;
+          break;
+        default:
+          dataBuffer += curCharacter;
+      }
+    }
+    console.log("AOA:", aoa);
+    return aoa;
+  } catch (err) {
+    eventLog.textContent =
+      "Unable to safely convert CSV Data to required format. Please check file contains a valid header row and that line delimiter is \\n. Full Error: " +
+      err;
+  }
+}
+
+/**
  *
  * @param {blob} fileData csv or xlsx file data received in file input
  * @returns {XLSX.WorkBook} XLSX workbook
@@ -75,7 +145,7 @@ function createWorkbook(fileData) {
     if (uploadedFile.name.endsWith("xlsx")) {
       return XLSX.read(fileData, { type: "binary" }, { dateNF: "dd/mm/yyyy" });
     } else {
-      const sheetAOA = convertCsvToAOA(fileData, "\r\n", ",");
+      const sheetAOA = safeConvertCsvToAOA(fileData.toString(), "\n", ",", '"');
       const sheet = XLSX.utils.aoa_to_sheet(sheetAOA);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, sheet, "Orders");
@@ -101,36 +171,46 @@ reader.addEventListener("loadend", (e) => {
   const sheetData = XLSX.utils.sheet_to_json(orderSheet, sheetToJsonConfig);
   const sheetCsv = XLSX.utils.sheet_to_csv(orderSheet, sheetToCsvConfig);
   const sheetAOA = convertCsvToAOA(sheetCsv, "\r\n", "\t\t");
-  console.log("DEBUGGING::SHEETDATA", sheetData, sheetCsv, sheetAOA);
+  // console.log("DEBUGGING::SHEETDATA", sheetData, sheetCsv, sheetAOA);
   sheetAOA[0].push(...keyOrder);
   for (let idx = 0; idx < sheetData.length; idx++) {
     const row = sheetData[idx];
-    if (row["Additional Details"]) {
-      const details = row["Additional Details"].split("\n");
+    let attributes = row["Note Attributes"] !== undefined ? row["Note Attributes"] : row["Additional Details"];
+    // console.log("ATTRIBUTES", attributes, Object.keys(row), typeof attributes);
+    if (attributes !== null && attributes !== undefined) {
+      if(attributes[0] === '"') {
+        attributes = attributes.slice(1, attributes.length - 1);
+      }
+      const details = attributes.split("\n");
       for (const detail of details) {
         const [key, value] = detail.split(":").map((val) => val.trim());
         row[key] = value;
       }
+    } else {
+      console.log("IDX:", idx, sheetData[idx]);
+      eventLog.textContent = "Unable to find column 'Note Attributes' or 'Additional Details' in given file.";
+      return;
     }
     keyOrder.forEach((key) => {
       sheetAOA[idx + 1].push(row[key] ? row[key] : "NA");
     });
   }
-  console.log("DEBUGGING::AVAILABLE", sheetAOA);
+  // console.log("DEBUGGING::AVAILABLE", sheetAOA);
   const updatedXLSX = XLSX.utils.aoa_to_sheet(sheetAOA);
   const updatedWorkbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(updatedWorkbook, updatedXLSX, "Orders");
-  const table = XLSX.utils.sheet_to_html(updatedXLSX);
-  const iframe = document.getElementById("table-iframe");
-  const iframeDoc = iframe.contentWindow.document;
-  iframeDoc.open();
-  iframeDoc.write(table);
-  iframeDoc.write(iframeStyles);
-  iframeDoc.close();
+  // const table = XLSX.utils.sheet_to_html(updatedXLSX);
+  // const iframe = document.getElementById("table-iframe");
+  // const iframeDoc = iframe.contentWindow.document;
+  // iframeDoc.open();
+  // iframeDoc.write(table);
+  // iframeDoc.write(iframeStyles);
+  // iframeDoc.close();
   XLSX.writeFile(
     updatedWorkbook,
     uploadedFile.name.split(".")[0] + "-updated.xlsx"
   );
+  eventLog.textContent = "Completed parsing and updating file. Ready for next file..."
 });
 
 /**
