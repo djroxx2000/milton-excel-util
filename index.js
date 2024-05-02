@@ -175,10 +175,13 @@ reader.addEventListener("loadend", (e) => {
   sheetAOA[0].push(...keyOrder);
   for (let idx = 0; idx < sheetData.length; idx++) {
     const row = sheetData[idx];
-    let attributes = row["Note Attributes"] !== undefined ? row["Note Attributes"] : row["Additional Details"];
+    let attributes =
+      row["Note Attributes"] !== undefined
+        ? row["Note Attributes"]
+        : row["Additional Details"];
     // console.log("ATTRIBUTES", attributes, Object.keys(row), typeof attributes);
     if (attributes !== null && attributes !== undefined) {
-      if(attributes[0] === '"') {
+      if (attributes[0] === '"') {
         attributes = attributes.slice(1, attributes.length - 1);
       }
       const details = attributes.split("\n");
@@ -188,17 +191,46 @@ reader.addEventListener("loadend", (e) => {
       }
     } else {
       console.log("IDX:", idx, sheetData[idx]);
-      eventLog.textContent = "Unable to find column 'Note Attributes' or 'Additional Details' in given file.";
+      eventLog.textContent =
+        "Unable to find column 'Note Attributes' or 'Additional Details' in given file.";
       return;
     }
     keyOrder.forEach((key) => {
-      sheetAOA[idx + 1].push(row[key] ? row[key] : "NA");
+      sheetAOA[idx + 1].push(row[key] ? row[key] : "N/A");
     });
   }
   // console.log("DEBUGGING::AVAILABLE", sheetAOA);
   const updatedXLSX = XLSX.utils.aoa_to_sheet(sheetAOA);
-  const updatedWorkbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(updatedWorkbook, updatedXLSX, "Orders");
+  const updatedCSV = XLSX.utils.sheet_to_csv(updatedXLSX, {
+    raw: false,
+    defval: null,
+    RS: "\n",
+    FS: ",",
+  });
+  // const updatedCSV1 = updatedCSV
+  //   .split(",")
+  //   .map((data) => {
+  //     if(data.replaceAll('"', '') === '') {
+  //       return '';
+  //     } else {
+  //       return data;
+  //     }
+  //   })
+  //   .join(",");
+  // console.log("FINALCSV:", updatedCSV);
+  const updatedCSV1 = updatedCSV.replaceAll('"""', '');
+  const csvBlob = new Blob([updatedCSV1], { type: "text/csv" });
+  const blobUrl = window.URL.createObjectURL(csvBlob);
+  const downloadLink = document.getElementById("download-link");
+  downloadLink.href = blobUrl;
+  downloadLink.setAttribute(
+    "download",
+    uploadedFile.name.split(".")[0] + "-updated.csv"
+  );
+  document.getElementById("download-link").click();
+  window.URL.revokeObjectURL(blobUrl);
+  // const updatedWorkbook = XLSX.utils.book_new();
+  // XLSX.utils.book_append_sheet(updatedWorkbook, updatedXLSX, "Orders");
   // const table = XLSX.utils.sheet_to_html(updatedXLSX);
   // const iframe = document.getElementById("table-iframe");
   // const iframeDoc = iframe.contentWindow.document;
@@ -206,11 +238,9 @@ reader.addEventListener("loadend", (e) => {
   // iframeDoc.write(table);
   // iframeDoc.write(iframeStyles);
   // iframeDoc.close();
-  XLSX.writeFile(
-    updatedWorkbook,
-    uploadedFile.name.split(".")[0] + "-updated.xlsx"
-  );
-  eventLog.textContent = "Completed parsing and updating file. Ready for next file..."
+  // XLSX.writeFile(updatedCSV, uploadedFile.name.split(".")[0] + "-updated.csv");
+  eventLog.textContent =
+    "Completed parsing and updating file. Ready for next file...";
 });
 
 /**
